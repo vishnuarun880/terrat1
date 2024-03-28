@@ -7,7 +7,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  BUCKET_NAME: "s6qweasdzxc-hsbtg6"
+  BUCKET_NAME: "asdfghjkllkjhgfdsaasdfghjkl"
   AWS_REGION: "us-east-1"
 
 jobs:
