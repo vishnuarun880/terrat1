@@ -1,33 +1,77 @@
-name: Update Website
+name: Start and Wait for AWS Instance
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch: {}
-
-env:
-  BUCKET_NAME: "asdfghjkllkjhgfdsaasdfghjkl"
-  AWS_REGION: "us-east-1"
 
 jobs:
-  deploy:
-    name: Deploy to Website
+  start-and-wait:
+    name: Start and Wait for AWS Instance
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+    env:
+      AWS_REGION: eu-west-3
+      INSTANCE_TAG_KEY: env
+      INSTANCE_TAG_VALUE: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/YOUR_ROLE_NAME
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Start and Wait for AWS EC2 Instances
+        id: start-and-wait
+        run: |
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+                        --region $AWS_REGION \
+                        --filters "Name=tag:${INSTANCE_TAG_KEY},Values=${INSTANCE_TAG_VALUE}" \
+                        --query "Reservations[].Instances[].InstanceId" \
+                        --output text)
+          
+          if [ -z "$INSTANCE_IDS" ]; then
+            echo "No instances found with tag ${INSTANCE_TAG_KEY}=${INSTANCE_TAG_VALUE}."
+            exit 1
+          fi
+
+          # Start instances if not already running
+          aws ec2 start-instances --region $AWS_REGION --instance-ids $INSTANCE_IDS
+
+          # Wait for all instances to be running
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Waiting for instance $INSTANCE_ID to be running..."
+            while true; do
+              INSTANCE_STATE=$(aws ec2 describe-instances \
+                                --region $AWS_REGION \
+                                --instance-ids $INSTANCE_ID \
+                                --query "Reservations[].Instances[].State.Name" \
+                                --output text)
+              if [ "$INSTANCE_STATE" == "running" ]; then
+                echo "Instance $INSTANCE_ID is now running and initialized."
+                break
+              else
+                echo "Instance $INSTANCE_ID not yet running, waiting..."
+                sleep 10
+              fi
+            done
+          done
+
+  ci-cd-pipeline:
+    name: CI/CD Pipeline
+    runs-on: ubuntu-latest
+    needs: start-and-wait
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          role-to-assume: arn:aws:iam::854755582447:role/github_action_terraform
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Sync website with S3 bucket
+      - name: Perform follow-up actions
         run: |
-          aws s3 sync ./static/html s3://${{ env.BUCKET_NAME }}/ --delete
+          echo "The instance is running. Performing follow-up action..."
+
+      - name: Stop EC2 Instance
+        run: |
+          curl -H "Authorization: allow" https://b0cn15cfi9.execute-api.eu-west-3.amazonaws.com/stop/ec2s
+          echo "EC2 instance stop request sent."
