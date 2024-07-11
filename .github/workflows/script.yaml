@@ -20,7 +20,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::854755582447:oidc-provider/token.actions.githubusercontent.com
+          role-to-assume: arn:aws:iam::854755582447:oidc-provider/token.actions.githubusercontent.com/oicd_role
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Start and Wait for AWS EC2 Instances
